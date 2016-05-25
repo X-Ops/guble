@@ -19,6 +19,11 @@ type Stopable interface {
 	Stop() error
 }
 
+// HealthChecker interface for modules which provide a health-check mechanism
+type HealthChecker interface {
+	Health() error
+}
+
 // Endpoint adds a HTTP handler for the `GetPrefix()` to the webserver
 type Endpoint interface {
 	http.Handler
@@ -29,8 +34,9 @@ type Endpoint interface {
 type Service struct {
 	webServer     *WebServer
 	router        Router
-	stopListener  []Stopable
 	startListener []Startable
+	stopListener  []Stopable
+	healthListener []HealthChecker
 	// The time given to each Module on Stop()
 	StopGracePeriod time.Duration
 }
@@ -54,8 +60,10 @@ func NewService(
 // Register the supplied module on this service.
 // This method checks the module for the following interfaces and
 // does the expected registrations:
+//   Startable:
 //   Stopable: notify when the service stops
-//   Endpoint: Register the handler function of the Endpoint in the http service at prefix
+//   HealthChecker:
+//   Endpoint: register the handler function of the Endpoint in the http service at prefix
 //
 // If the module does not have a HandlerFunc, the prefix parameter is ignored
 func (service *Service) Register(module interface{}) {
@@ -64,6 +72,11 @@ func (service *Service) Register(module interface{}) {
 	if m, ok := module.(Startable); ok {
 		protocol.Info("register %v as StartListener", name)
 		service.AddStartListener(m)
+	}
+
+	if m, ok := module.(HealthChecker); ok {
+		protocol.Info("register %v as HealthChecker", name)
+		service.AddHealthListener(m)
 	}
 
 	if m, ok := module.(Endpoint); ok {
@@ -102,6 +115,10 @@ func (service *Service) AddStopListener(stopable Stopable) {
 
 func (service *Service) AddStartListener(startable Startable) {
 	service.startListener = append(service.startListener, startable)
+}
+
+func (service *Service) AddHealthListener(healthChecker HealthChecker) {
+	service.healthListener = append(service.healthListener, healthChecker)
 }
 
 func (service *Service) Stop() error {
