@@ -62,8 +62,8 @@ func NewService(addr string, router Router) *Service {
 
 // Register the supplied module on this service.
 // This method checks the module for the following interfaces and does the expected registrations:
-//   Module: always
-//   Endpoint: if necessary, register the handler function of the Endpoint in the http service at prefix
+//   Module: if appropriate, add it to the slice of Modules
+//   Endpoint: if appropriate, register the handler function of the Endpoint in the http service at prefix
 func (service *Service) Register(i interface{}) {
 	name := reflect.TypeOf(i).String()
 
