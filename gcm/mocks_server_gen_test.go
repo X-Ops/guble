@@ -53,6 +53,16 @@ func (_mr *_MockRouterRecorder) HandleMessage(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "HandleMessage", arg0)
 }
 
+func (_m *MockRouter) Health() error {
+	ret := _m.ctrl.Call(_m, "Health")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockRouterRecorder) Health() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Health")
+}
+
 func (_m *MockRouter) KVStore() (store.KVStore, error) {
 	ret := _m.ctrl.Call(_m, "KVStore")
 	ret0, _ := ret[0].(store.KVStore)
@@ -73,6 +83,26 @@ func (_m *MockRouter) MessageStore() (store.MessageStore, error) {
 
 func (_mr *_MockRouterRecorder) MessageStore() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "MessageStore")
+}
+
+func (_m *MockRouter) Start() error {
+	ret := _m.ctrl.Call(_m, "Start")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockRouterRecorder) Start() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Start")
+}
+
+func (_m *MockRouter) Stop() error {
+	ret := _m.ctrl.Call(_m, "Stop")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockRouterRecorder) Stop() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Stop")
 }
 
 func (_m *MockRouter) Subscribe(_param0 *server.Route) (*server.Route, error) {

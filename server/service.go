@@ -24,6 +24,13 @@ type HealthChecker interface {
 	Health() error
 }
 
+// Module is an interface aggregating basic interfaces.
+type Module interface {
+	Startable
+	Stopable
+	HealthChecker
+}
+
 // Endpoint adds a HTTP handler for the `GetPrefix()` to the webserver
 type Endpoint interface {
 	http.Handler
@@ -32,21 +39,17 @@ type Endpoint interface {
 
 // Service is the main class for simple control of a server
 type Service struct {
-	webServer     *WebServer
-	router        Router
-	startListener []Startable
-	stopListener  []Stopable
-	healthListener []HealthChecker
+	webServer *WebServer
+	router    Router
+	modules   []Module
 	// The time given to each Module on Stop()
 	StopGracePeriod time.Duration
 }
 
 // NewService registers the Main Router, where other modules can subscribe for messages
-func NewService(
-	addr string,
-	router Router) *Service {
+func NewService(addr string, router Router) *Service {
 	service := &Service{
-		stopListener:    make([]Stopable, 0, 5),
+		modules:         make([]Module, 0, 5),
 		webServer:       NewWebServer(addr),
 		router:          router,
 		StopGracePeriod: time.Second * 2,
@@ -58,46 +61,27 @@ func NewService(
 }
 
 // Register the supplied module on this service.
-// This method checks the module for the following interfaces and
-// does the expected registrations:
-//   Startable:
-//   Stopable: notify when the service stops
-//   HealthChecker:
-//   Endpoint: register the handler function of the Endpoint in the http service at prefix
-//
-// If the module does not have a HandlerFunc, the prefix parameter is ignored
-func (service *Service) Register(module interface{}) {
-	name := reflect.TypeOf(module).String()
+// This method checks the module for the following interfaces and does the expected registrations:
+//   Module: always
+//   Endpoint: if necessary, register the handler function of the Endpoint in the http service at prefix
+func (service *Service) Register(i interface{}) {
+	name := reflect.TypeOf(i).String()
 
-	if m, ok := module.(Startable); ok {
-		protocol.Info("register %v as StartListener", name)
-		service.AddStartListener(m)
+	if m, ok := i.(Module); ok {
+		protocol.Info("register module %v", name)
+		service.modules = append(service.modules, m)
 	}
 
-	if m, ok := module.(HealthChecker); ok {
-		protocol.Info("register %v as HealthChecker", name)
-		service.AddHealthListener(m)
+	if e, ok := i.(Endpoint); ok {
+		protocol.Info("register %v as Endpoint to %v", name, e.GetPrefix())
+		service.webServer.Handle(e.GetPrefix(), e)
 	}
-
-	if m, ok := module.(Endpoint); ok {
-		protocol.Info("register %v as Endpoint to %v", name, m.GetPrefix())
-		service.AddHandler(m.GetPrefix(), m)
-	}
-
-	if m, ok := module.(Stopable); ok {
-		protocol.Info("register %v as StopListener", name)
-		service.AddStopListener(m)
-	}
-}
-
-func (service *Service) AddHandler(prefix string, handler http.Handler) {
-	service.webServer.mux.Handle(prefix, handler)
 }
 
 func (service *Service) Start() error {
-	el := protocol.NewErrorList("Errors occured while startup the service: ")
+	el := protocol.NewErrorList("Errors occured while starting the service: ")
 
-	for _, startable := range service.startListener {
+	for _, startable := range service.modules {
 		name := reflect.TypeOf(startable).String()
 
 		protocol.Debug("starting module %v", name)
@@ -109,21 +93,9 @@ func (service *Service) Start() error {
 	return el.ErrorOrNil()
 }
 
-func (service *Service) AddStopListener(stopable Stopable) {
-	service.stopListener = append(service.stopListener, stopable)
-}
-
-func (service *Service) AddStartListener(startable Startable) {
-	service.startListener = append(service.startListener, startable)
-}
-
-func (service *Service) AddHealthListener(healthChecker HealthChecker) {
-	service.healthListener = append(service.healthListener, healthChecker)
-}
-
 func (service *Service) Stop() error {
 	errors := make(map[string]error)
-	for _, stopable := range service.stopListener {
+	for _, stopable := range service.modules {
 		name := reflect.TypeOf(stopable).String()
 		stoppedChan := make(chan bool)
 		errorChan := make(chan error)
@@ -153,6 +125,6 @@ func (service *Service) Stop() error {
 	return nil
 }
 
-func (service *Service) GetWebServer() *WebServer {
+func (service *Service) WebServer() *WebServer {
 	return service.webServer
 }
