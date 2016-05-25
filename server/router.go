@@ -92,13 +92,13 @@ func (router *router) Start() error {
 	return nil
 }
 
-// Stop stops the router by closing the stop channel
-func (router *router) Stop() error {
-	close(router.stop)
+func (router *router) Check() error {
 	return nil
 }
 
-func (router *router) Health() error {
+// Stop stops the router by closing the stop channel
+func (router *router) Stop() error {
+	close(router.stop)
 	return nil
 }
 

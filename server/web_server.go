@@ -49,7 +49,7 @@ func (ws *WebServer) Stop() error {
 	return nil
 }
 
-func (ws *WebServer) Health() error {
+func (ws *WebServer) Check() error {
 	return nil
 }
 

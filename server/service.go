@@ -2,6 +2,7 @@ package server
 
 import (
 	"github.com/smancke/guble/protocol"
+	"github.com/docker/distribution/health"
 
 	"fmt"
 	"net/http"
@@ -19,16 +20,11 @@ type Stopable interface {
 	Stop() error
 }
 
-// HealthChecker interface for modules which provide a health-check mechanism
-type HealthChecker interface {
-	Health() error
-}
-
 // Module is an interface aggregating basic interfaces.
 type Module interface {
 	Startable
 	Stopable
-	HealthChecker
+	health.Checker
 }
 
 // Endpoint adds a HTTP handler for the `GetPrefix()` to the webserver
@@ -57,6 +53,8 @@ func NewService(addr string, router Router) *Service {
 	service.Register(service.webServer)
 	service.Register(service.router)
 
+	service.webServer.Handle("/health", http.HandlerFunc(health.StatusHandler))
+
 	return service
 }
 
@@ -80,15 +78,18 @@ func (service *Service) Register(i interface{}) {
 
 func (service *Service) Start() error {
 	el := protocol.NewErrorList("Errors occured while starting the service: ")
-
-	for _, startable := range service.modules {
-		name := reflect.TypeOf(startable).String()
+	for _, module := range service.modules {
+		name := reflect.TypeOf(module).String()
 
 		protocol.Debug("starting module %v", name)
-		if err := startable.Start(); err != nil {
-			protocol.Err("error on startup module %v", name)
+		if err := module.Start(); err != nil {
+			protocol.Err("error on starting module %v", name)
 			el.Add(err)
 		}
+
+		protocol.Debug("registering health-check for module %v", name)
+		//TODO parameterize / configure frequency and threshold
+		health.RegisterPeriodicThresholdFunc(name, time.Second*60, 1, health.CheckFunc(module.Check))
 	}
 	return el.ErrorOrNil()
 }
