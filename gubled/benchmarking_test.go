@@ -15,7 +15,6 @@ import (
 	"github.com/smancke/guble/gubled/config"
 	"github.com/smancke/guble/protocol"
 	"github.com/smancke/guble/testutil"
-	"os/exec"
 )
 
 type testgroup struct {
@@ -78,7 +77,7 @@ func TestThroughput(t *testing.T) {
 	}()
 
 	// start test after filesystem sync
-	fsync(t)
+	assert.NoError(t, testutil.SyncStorage())
 
 	log.Print("start the testgroups")
 	start := time.Now()
@@ -104,8 +103,7 @@ func TestThroughput(t *testing.T) {
 		}
 	}
 
-	fsync(t)
-
+	assert.NoError(t, testutil.SyncStorage())
 	end := time.Now()
 	totalMessages := testgroupCount * messagesPerGroup
 	throughput := float64(totalMessages) / end.Sub(start).Seconds()
@@ -116,7 +114,6 @@ func (tg *testgroup) Init() {
 	tg.topic = fmt.Sprintf("/%v-foo", tg.groupID)
 	var err error
 	location := "ws://" + tg.addr + "/stream/user/xy"
-	//location := "ws://gathermon.mancke.net:8080/stream/"
 	//location := "ws://127.0.0.1:8080/stream/"
 	tg.client1, err = client.Open(location, "http://localhost/", 10, false)
 	if err != nil {
@@ -150,6 +147,7 @@ func (tg *testgroup) expectStatusMessage(name string, arg string) {
 func (tg *testgroup) Start() {
 	go func() {
 		for i := 0; i < tg.messagesToSend; i++ {
+			// message body has constant length
 			body := fmt.Sprintf("%16d", i)
 			tg.client2.Send(tg.topic, body, "")
 		}
@@ -180,10 +178,4 @@ func (tg *testgroup) Start() {
 func (tg *testgroup) Clean() {
 	tg.client1.Close()
 	tg.client2.Close()
-}
-
-func fsync(t *testing.T) {
-	cmdSync := exec.Command("sync")
-	errRun := cmdSync.Run()
-	assert.NoError(t, errRun)
 }
