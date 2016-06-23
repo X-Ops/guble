@@ -15,6 +15,7 @@ import (
 	"github.com/smancke/guble/gubled/config"
 	"github.com/smancke/guble/protocol"
 	"github.com/smancke/guble/testutil"
+	"os/exec"
 )
 
 type testgroup struct {
@@ -38,7 +39,7 @@ func newTestgroup(t *testing.T, groupID int, addr string, messagesToSend int) *t
 }
 
 func TestThroughput(t *testing.T) {
-	//testutil.EnableDebugForMethod()
+	//testutil.EnableDebugForMethod()()
 	defer testutil.ResetDefaultRegistryHealthCheck()
 
 	dir, _ := ioutil.TempDir("", "guble_benchmarking_test")
@@ -50,9 +51,8 @@ func TestThroughput(t *testing.T) {
 	*config.StoragePath = dir
 
 	service := StartService()
-	defer func() {
-		service.Stop()
-	}()
+	defer service.Stop()
+
 	time.Sleep(time.Millisecond * 10)
 
 	testgroupCount := 4
@@ -77,7 +77,9 @@ func TestThroughput(t *testing.T) {
 		}
 	}()
 
-	// start test
+	// start test after filesystem sync
+	fsync(t)
+
 	log.Print("start the testgroups")
 	start := time.Now()
 	for i := range testgroups {
@@ -87,7 +89,7 @@ func TestThroughput(t *testing.T) {
 	log.Print("wait for finishing")
 	timeout := time.After(time.Second * 60)
 	for i, test := range testgroups {
-		//fmt.Printf("wating for test %v\n", i)
+		//fmt.Printf("waiting for test %v\n", i)
 		select {
 		case successFlag := <-test.done:
 			if !successFlag {
@@ -102,10 +104,12 @@ func TestThroughput(t *testing.T) {
 		}
 	}
 
+	fsync(t)
+
 	end := time.Now()
 	totalMessages := testgroupCount * messagesPerGroup
 	throughput := float64(totalMessages) / end.Sub(start).Seconds()
-	log.Printf("finished! Throughput: %v/sec (%v message in %v)", int(throughput), totalMessages, end.Sub(start))
+	log.Printf("Finished! Throughput: %v/sec (%v message in %v)", int(throughput), totalMessages, end.Sub(start))
 }
 
 func (tg *testgroup) Init() {
@@ -146,13 +150,13 @@ func (tg *testgroup) expectStatusMessage(name string, arg string) {
 func (tg *testgroup) Start() {
 	go func() {
 		for i := 0; i < tg.messagesToSend; i++ {
-			body := fmt.Sprintf("Hallo-%v", i)
+			body := fmt.Sprintf("%16d", i)
 			tg.client2.Send(tg.topic, body, "")
 		}
 	}()
 
 	for i := 0; i < tg.messagesToSend; i++ {
-		body := fmt.Sprintf("Hallo-%v", i)
+		body := fmt.Sprintf("%16d", i)
 
 		select {
 		case msg := <-tg.client1.Messages():
@@ -176,4 +180,10 @@ func (tg *testgroup) Start() {
 func (tg *testgroup) Clean() {
 	tg.client1.Close()
 	tg.client2.Close()
+}
+
+func fsync(t *testing.T) {
+	cmdSync := exec.Command("sync")
+	errRun := cmdSync.Run()
+	assert.NoError(t, errRun)
 }
